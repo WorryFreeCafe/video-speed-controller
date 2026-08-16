@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 240px;
+      padding: 14px;
+      font-family: system-ui, -apple-system, sans-serif;
+      font-size: 13px;
+      color: #222;
+    }
+    h1 {
+      margin-bottom: 10px;
+      font-size: 15px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    h1 .icon { font-size: 18px; }
+    .value {
+      margin-bottom: 10px;
+      font-size: 24px;
+      font-weight: 700;
+      text-align: center;
+      color: #111;
+    }
+    .slider {
+      width: 100%;
+      margin-bottom: 12px;
+      cursor: pointer;
+      accent-color: #3b82f6;
+    }
+    .row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 10px;
+    }
+    .btn {
+      width: 34px;
+      height: 34px;
+      padding: 0;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 18px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .btn:hover {
+      background: #f3f4f6;
+      border-color: #9ca3af;
+    }
+    .btn:active {
+      background: #e5e7eb;
+    }
+    .input {
+      flex: 1;
+      min-width: 0;
+      padding: 7px 8px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      text-align: center;
+      transition: border-color 0.15s;
+    }
+    .input:focus {
+      border-color: #3b82f6;
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(59,130,246,0.15);
+    }
+    .hint {
+      margin-bottom: 10px;
+      font-size: 11px;
+      color: #9ca3af;
+      text-align: center;
+    }
+    #status {
+      margin-top: 2px;
+      font-size: 12px;
+      color: #6b7280;
+      min-height: 18px;
+      text-align: center;
+      transition: color 0.2s;
+    }
+    #status.error {
+      color: #dc2626;
+    }
+    .restore-panel {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: #f9fafb;
+      color: #374151;
+      font-size: 12px;
+      cursor: pointer;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .restore-panel:hover {
+      background: #f3f4f6;
+      border-color: #d1d5db;
+    }
+  </style>
+</head>
+<body>
+  <h1><span class="icon">🎬</span> 播放速度控制</h1>
+  <div class="value" id="speedValue">1x</div>
+  <input class="slider" id="speedRange" type="range"
+         min="0.1" max="4" step="0.05" value="1">
+  <div class="row">
+    <button class="btn" id="speedDown" type="button">−</button>
+    <input class="input" id="speedInput" type="number"
+           min="0.1" max="4" step="0.01" value="1">
+    <button class="btn" id="speedUp" type="button">+</button>
+  </div>
+  <p class="hint">范围 0.1x – 4x · 步进 0.05x</p>
+  <button class="restore-panel" id="restorePanel" type="button">
+    🔄 恢复页面上的速度面板
+  </button>
+  <p id="status"></p>
+  <script src="popup.js"></script>
+</body>
+</html>
