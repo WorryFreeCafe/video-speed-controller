@@ -6,6 +6,7 @@
   const STEP = 0.05;
   const ROOT_ID = 'ysc-root';
   const STORAGE_KEY = 'ysc-panel-state';
+  const POS_KEY = 'ysc-panel-pos';
 
   // ── 工具函数 ──────────────────────────────────────────────
 
@@ -27,9 +28,9 @@
 
   function getPanelState() {
     try {
-      return localStorage.getItem(STORAGE_KEY) || 'minimized';
+      return localStorage.getItem(STORAGE_KEY) || 'closed';
     } catch {
-      return 'minimized';
+      return 'closed';
     }
   }
 
@@ -69,12 +70,6 @@
     if (miniInput && document.activeElement !== miniInput) {
       miniInput.value = normalized;
     }
-
-    // 所有速度标签
-    const labels = root.querySelectorAll('.ysc-speed-label');
-    labels.forEach((el) => {
-      el.textContent = normalized + 'x';
-    });
   }
 
   // ── Toast ──────────────────────────────────────────────────
@@ -121,12 +116,129 @@
     }
   }
 
+  // 强制设置面板状态（页面加载/导航时忽略持久化记录，默认不显示）
+  function forcePanelState(state) {
+    const root = getRoot();
+    if (!root) return;
+
+    root.dataset.state = state;
+
+    if (state === 'expanded' || state === 'minimized') {
+      const video = getVideo();
+      if (video) updateControls(video.playbackRate);
+    }
+  }
+
+  // ── 面板位置（拖动持久化）─────────────────────────────────
+
+  function getSavedPosition() {
+    try {
+      const raw = localStorage.getItem(POS_KEY);
+      if (!raw) return null;
+      const pos = JSON.parse(raw);
+      if (pos && typeof pos.x === 'number' && typeof pos.y === 'number') {
+        return pos;
+      }
+    } catch { /* 忽略 */ }
+    return null;
+  }
+
+  function savePanelPosition() {
+    const root = getRoot();
+    if (!root) return;
+    const rect = root.getBoundingClientRect();
+    try {
+      localStorage.setItem(
+        POS_KEY,
+        JSON.stringify({ x: Math.round(rect.left), y: Math.round(rect.top) })
+      );
+    } catch { /* 忽略 */ }
+  }
+
+  // ── 面板拖动 ──────────────────────────────────────────────
+
+  function enableDrag(root) {
+    let startX = 0;
+    let startY = 0;
+    let startLeft = 0;
+    let startTop = 0;
+    let dragging = false;
+    let suppressClick = false;
+
+    root.addEventListener('mousedown', function (e) {
+      // 只在左键、且目标不是交互控件时开始拖动
+      if (e.button !== 0) return;
+      if (e.target.closest('button, input, a, .ysc-slider')) return;
+
+      dragging = false;
+      startX = e.clientX;
+      startY = e.clientY;
+      const rect = root.getBoundingClientRect();
+      startLeft = rect.left;
+      startTop = rect.top;
+
+      function onMove(ev) {
+        const dx = ev.clientX - startX;
+        const dy = ev.clientY - startY;
+
+        // 位移超过阈值才视为拖动（与点击区分）
+        if (!dragging && Math.abs(dx) + Math.abs(dy) > 4) {
+          dragging = true;
+          root.classList.add('ysc-dragging');
+          root.style.right = 'auto';
+        }
+
+        if (dragging) {
+          const maxX = Math.max(0, window.innerWidth - root.offsetWidth);
+          const maxY = Math.max(0, window.innerHeight - root.offsetHeight);
+          const left = Math.min(Math.max(0, startLeft + dx), maxX);
+          const top = Math.min(Math.max(0, startTop + dy), maxY);
+          root.style.left = left + 'px';
+          root.style.top = top + 'px';
+        }
+      }
+
+      function onUp() {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        if (dragging) {
+          root.classList.remove('ysc-dragging');
+          savePanelPosition();
+          // 抑制拖动结束后误触发的 click
+          suppressClick = true;
+          setTimeout(function () {
+            suppressClick = false;
+          }, 0);
+        }
+      }
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+
+    // 捕获阶段拦截拖动后的误点击
+    root.addEventListener(
+      'click',
+      function (e) {
+        if (suppressClick) {
+          e.stopPropagation();
+          e.preventDefault();
+        }
+      },
+      true
+    );
+  }
+
   // ── 创建面板（完整面板 + 迷你面板）─────────────────────────
 
-  function createPanel() {
+  function createPanel(initialState) {
     // 已有面板则只应用状态
     if (document.getElementById(ROOT_ID)) {
-      applyPanelState();
+      if (initialState) {
+        forcePanelState(initialState);
+      } else {
+        applyPanelState();
+      }
       return;
     }
 
@@ -136,63 +248,100 @@
       '<style>' +
       '#' + ROOT_ID + ' {' +
       '  position:fixed;right:16px;bottom:80px;z-index:9999;' +
-      '  font:13px/1.4 system-ui,sans-serif;' +
+      '  font:12px/1.4 system-ui,-apple-system,sans-serif;' +
+      '  color:#fff;user-select:none;' +
+      '  opacity:.38;transition:opacity .22s ease;' +
       '}' +
+      '#' + ROOT_ID + ':hover { opacity:1; }' +
+      '#' + ROOT_ID + '.ysc-dragging { opacity:1; }' +
+      '#' + ROOT_ID + '.ysc-dragging,' +
+      '#' + ROOT_ID + '.ysc-dragging * { cursor:grabbing !important; }' +
       '#' + ROOT_ID + ' .ysc-panel {' +
-      '  width:220px;background:rgba(28,28,28,0.95);color:#fff;' +
-      '  border:1px solid rgba(255,255,255,0.15);border-radius:10px;' +
-      '  padding:12px;box-shadow:0 4px 16px rgba(0,0,0,0.35);' +
+      '  width:180px;padding:10px 12px;border-radius:14px;' +
+      '  background:linear-gradient(160deg,rgba(38,40,52,.82),rgba(14,16,24,.76));' +
+      '  border:1px solid rgba(255,255,255,.14);' +
+      '  box-shadow:0 8px 24px rgba(0,0,0,.4);' +
+      '  -webkit-backdrop-filter:blur(12px) saturate(1.2);' +
+      '  backdrop-filter:blur(12px) saturate(1.2);' +
       '}' +
       '#' + ROOT_ID + ' .ysc-header {' +
       '  display:flex;align-items:center;justify-content:space-between;' +
-      '  margin-bottom:10px;' +
+      '  margin-bottom:8px;cursor:grab;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-title {' +
-      '  font-size:12px;font-weight:600;opacity:0.85;' +
+      '  font-size:11px;font-weight:600;opacity:.8;letter-spacing:.3px;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-header-actions {' +
-      '  display:flex;gap:4px;' +
+      '  display:flex;gap:2px;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-icon-btn {' +
-      '  width:24px;height:24px;padding:0;border:none;border-radius:4px;' +
-      '  background:transparent;color:#fff;font-size:14px;cursor:pointer;' +
+      '  width:22px;height:22px;padding:0;border:none;border-radius:7px;' +
+      '  background:transparent;color:rgba(255,255,255,.55);' +
+      '  font-size:13px;cursor:pointer;' +
+      '  transition:background .15s,color .15s;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-icon-btn:hover {' +
-      '  background:rgba(255,255,255,0.12);' +
-      '}' +
-      '#' + ROOT_ID + ' .ysc-value {' +
-      '  text-align:center;font-size:22px;font-weight:700;margin-bottom:8px;' +
+      '  background:rgba(255,255,255,.14);color:#fff;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-slider {' +
-      '  width:100%;margin-bottom:10px;cursor:pointer;' +
+      '  -webkit-appearance:none;appearance:none;' +
+      '  width:100%;height:4px;margin:0 0 10px;' +
+      '  border-radius:2px;background:rgba(255,255,255,.16);' +
+      '  outline:none;cursor:pointer;' +
+      '}' +
+      '#' + ROOT_ID + ' .ysc-slider::-webkit-slider-thumb {' +
+      '  -webkit-appearance:none;width:13px;height:13px;border-radius:50%;' +
+      '  background:#fff;border:2px solid #4f8cff;' +
+      '  box-shadow:0 1px 4px rgba(0,0,0,.45);cursor:pointer;' +
+      '  transition:transform .12s;' +
+      '}' +
+      '#' + ROOT_ID + ' .ysc-slider::-webkit-slider-thumb:hover {' +
+      '  transform:scale(1.15);' +
+      '}' +
+      '#' + ROOT_ID + ' .ysc-slider::-moz-range-thumb {' +
+      '  width:13px;height:13px;border-radius:50%;' +
+      '  background:#fff;border:2px solid #4f8cff;cursor:pointer;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-row {' +
       '  display:flex;align-items:center;gap:6px;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-btn {' +
-      '  width:30px;height:30px;padding:0;' +
-      '  border:1px solid rgba(255,255,255,0.2);border-radius:6px;' +
-      '  background:rgba(255,255,255,0.08);color:#fff;' +
-      '  font-size:16px;font-weight:700;cursor:pointer;' +
+      '  width:28px;height:28px;padding:0;' +
+      '  border:1px solid rgba(255,255,255,.16);border-radius:9px;' +
+      '  background:rgba(255,255,255,.08);color:#fff;' +
+      '  font-size:15px;font-weight:700;cursor:pointer;' +
+      '  transition:background .15s,transform .1s;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-btn:hover {' +
-      '  background:rgba(255,255,255,0.18);' +
+      '  background:rgba(255,255,255,.18);' +
+      '}' +
+      '#' + ROOT_ID + ' .ysc-btn:active {' +
+      '  transform:scale(.92);' +
       '}' +
       '#' + ROOT_ID + ' .ysc-input {' +
-      '  flex:1;min-width:0;padding:6px 8px;' +
-      '  border:1px solid rgba(255,255,255,0.2);border-radius:6px;' +
-      '  background:rgba(0,0,0,0.3);color:#fff;' +
-      '  font-size:14px;text-align:center;' +
+      '  flex:1;min-width:0;height:30px;padding:0 6px;' +
+      '  border:1px solid rgba(255,255,255,.16);border-radius:9px;' +
+      '  background:rgba(0,0,0,.32);color:#fff;' +
+      '  font-size:15px;font-weight:700;text-align:center;outline:none;' +
+      '  -moz-appearance:textfield;' +
+      '  transition:border-color .15s;' +
+      '}' +
+      '#' + ROOT_ID + ' .ysc-input::-webkit-inner-spin-button,' +
+      '#' + ROOT_ID + ' .ysc-input::-webkit-outer-spin-button {' +
+      '  -webkit-appearance:none;margin:0;' +
+      '}' +
+      '#' + ROOT_ID + ' .ysc-input:focus {' +
+      '  border-color:rgba(79,140,255,.7);' +
       '}' +
       '#' + ROOT_ID + ' .ysc-hint {' +
-      '  margin:8px 0 0;font-size:11px;opacity:0.6;line-height:1.5;' +
+      '  margin:8px 0 0;font-size:10px;opacity:.55;line-height:1.5;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-toast {' +
       '  position:absolute;bottom:calc(100% + 8px);left:0;right:0;' +
-      '  padding:8px 12px;background:rgba(28,28,28,0.95);' +
-      '  border:1px solid rgba(255,255,255,0.15);border-radius:8px;' +
-      '  font-size:12px;line-height:1.5;' +
-      '  opacity:0;pointer-events:none;transition:opacity 0.2s;' +
+      '  padding:7px 10px;background:rgba(22,24,32,.92);' +
+      '  border:1px solid rgba(255,255,255,.14);border-radius:9px;' +
+      '  font-size:11px;line-height:1.5;' +
+      '  opacity:0;pointer-events:none;transition:opacity .2s;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-toast.visible { opacity:1; }' +
 
@@ -206,32 +355,39 @@
 
       /* ── 迷你面板 ── */
       '#' + ROOT_ID + ' .ysc-mini {' +
-      '  display:none;align-items:center;gap:5px;' +
-      '  background:rgba(28,28,28,0.92);' +
-      '  border:1px solid rgba(255,255,255,0.15);border-radius:8px;' +
-      '  padding:6px 8px;box-shadow:0 4px 16px rgba(0,0,0,0.35);' +
-      '  cursor:default;user-select:none;' +
+      '  display:none;align-items:center;gap:4px;' +
+      '  padding:4px 6px;border-radius:14px;' +
+      '  background:linear-gradient(160deg,rgba(38,40,52,.78),rgba(14,16,24,.72));' +
+      '  border:1px solid rgba(255,255,255,.14);' +
+      '  box-shadow:0 6px 18px rgba(0,0,0,.35);' +
+      '  -webkit-backdrop-filter:blur(10px) saturate(1.2);' +
+      '  backdrop-filter:blur(10px) saturate(1.2);' +
+      '  cursor:grab;user-select:none;' +
+      '}' +
+      '#' + ROOT_ID + ' .ysc-mini-dot {' +
+      '  width:6px;height:6px;border-radius:50%;flex-shrink:0;' +
+      '  background:#4f8cff;box-shadow:0 0 6px rgba(79,140,255,.8);' +
       '}' +
       '#' + ROOT_ID + ' .ysc-mini-btn {' +
-      '  width:28px;height:28px;padding:0;display:flex;' +
+      '  width:24px;height:24px;padding:0;display:flex;' +
       '  align-items:center;justify-content:center;' +
-      '  border:1px solid rgba(255,255,255,0.2);border-radius:6px;' +
-      '  background:rgba(255,255,255,0.08);color:#fff;' +
-      '  font-size:16px;font-weight:700;cursor:pointer;' +
-      '  transition:background 0.15s;flex-shrink:0;' +
+      '  border:1px solid rgba(255,255,255,.16);border-radius:8px;' +
+      '  background:rgba(255,255,255,.08);color:#fff;' +
+      '  font-size:15px;font-weight:600;cursor:pointer;' +
+      '  transition:background .15s,transform .1s;flex-shrink:0;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-mini-btn:hover {' +
-      '  background:rgba(255,255,255,0.18);' +
+      '  background:rgba(255,255,255,.18);' +
       '}' +
       '#' + ROOT_ID + ' .ysc-mini-btn:active {' +
-      '  background:rgba(255,255,255,0.25);' +
+      '  transform:scale(.92);' +
       '}' +
       '#' + ROOT_ID + ' .ysc-mini-input {' +
-      '  width:58px;height:28px;padding:2px 4px;' +
-      '  border:1px solid rgba(255,255,255,0.12);border-radius:5px;' +
-      '  background:rgba(0,0,0,0.25);color:#fff;' +
-      '  font-size:13px;font-weight:600;text-align:center;' +
-      '  transition:border-color 0.15s,background 0.15s;' +
+      '  width:52px;height:24px;padding:0 4px;' +
+      '  border:1px solid rgba(255,255,255,.12);border-radius:8px;' +
+      '  background:rgba(0,0,0,.3);color:#fff;' +
+      '  font-size:12px;font-weight:600;text-align:center;' +
+      '  transition:border-color .15s,background .15s;' +
       '  -moz-appearance:textfield;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-mini-input::-webkit-inner-spin-button,' +
@@ -239,36 +395,23 @@
       '  -webkit-appearance:none;margin:0;' +
       '}' +
       '#' + ROOT_ID + ' .ysc-mini-input:hover {' +
-      '  border-color:rgba(255,255,255,0.3);' +
+      '  border-color:rgba(255,255,255,.3);' +
       '}' +
       '#' + ROOT_ID + ' .ysc-mini-input:focus {' +
-      '  border-color:rgba(255,255,255,0.5);' +
-      '  background:rgba(0,0,0,0.45);outline:none;' +
+      '  border-color:rgba(79,140,255,.7);' +
+      '  background:rgba(0,0,0,.45);outline:none;' +
       '}' +
-      '#' + ROOT_ID + ' .ysc-mini-label {' +
-      '  font-size:11px;font-weight:600;opacity:0.7;' +
-      '  white-space:nowrap;flex-shrink:0;' +
-      '  padding:0 2px;cursor:default;' +
-      '}' +
+      '#' + ROOT_ID + ' .ysc-mini-expand,' +
       '#' + ROOT_ID + ' .ysc-mini-close {' +
-      '  width:20px;height:28px;padding:0;border:none;border-radius:4px;' +
-      '  background:transparent;color:rgba(255,255,255,0.45);' +
-      '  font-size:14px;cursor:pointer;flex-shrink:0;' +
-      '  transition:color 0.15s,background 0.15s;' +
+      '  width:20px;height:24px;padding:0;border:none;border-radius:7px;' +
+      '  background:transparent;color:rgba(255,255,255,.5);' +
+      '  font-size:11px;cursor:pointer;flex-shrink:0;' +
       '  display:flex;align-items:center;justify-content:center;' +
+      '  transition:color .15s,background .15s;' +
       '}' +
+      '#' + ROOT_ID + ' .ysc-mini-expand:hover,' +
       '#' + ROOT_ID + ' .ysc-mini-close:hover {' +
-      '  color:#fff;background:rgba(255,255,255,0.12);' +
-      '}' +
-      '#' + ROOT_ID + ' .ysc-mini-expand {' +
-      '  width:20px;height:28px;padding:0;border:none;border-radius:4px;' +
-      '  background:transparent;color:rgba(255,255,255,0.45);' +
-      '  font-size:10px;cursor:pointer;flex-shrink:0;' +
-      '  transition:color 0.15s,background 0.15s;' +
-      '  display:flex;align-items:center;justify-content:center;' +
-      '}' +
-      '#' + ROOT_ID + ' .ysc-mini-expand:hover {' +
-      '  color:#fff;background:rgba(255,255,255,0.1);' +
+      '  color:#fff;background:rgba(255,255,255,.12);' +
       '}' +
       '</style>' +
 
@@ -286,10 +429,6 @@
       '              title="关闭面板">&times;</button>' +
       '    </div>' +
       '  </div>' +
-      '  <div class="ysc-value ysc-speed-label">1x</div>' +
-      '  <input class="ysc-slider" type="range" ' +
-      '         min="' + MIN_SPEED + '" max="' + MAX_SPEED + '" ' +
-      '         step="' + STEP + '" value="1">' +
       '  <div class="ysc-row">' +
       '    <button class="ysc-btn ysc-down" type="button">−</button>' +
       '    <input class="ysc-input" type="number" ' +
@@ -297,6 +436,9 @@
       '           step="0.01" value="1">' +
       '    <button class="ysc-btn ysc-up" type="button">+</button>' +
       '  </div>' +
+      '  <input class="ysc-slider" type="range" ' +
+      '         min="' + MIN_SPEED + '" max="' + MAX_SPEED + '" ' +
+      '         step="' + STEP + '" value="1">' +
       '  <p class="ysc-hint">关闭或收起后，' +
       '    仍可点击浏览器右上角的' +
       '    扩展图标调节速度</p>' +
@@ -304,7 +446,7 @@
 
       // ── 迷你面板 ──
       '<div class="ysc-mini">' +
-      '  <span class="ysc-mini-label">播放速度</span>' +
+      '  <span class="ysc-mini-dot"></span>' +
       '  <button class="ysc-mini-btn ysc-mini-down" type="button" ' +
       '          title="减速">−</button>' +
       '  <input class="ysc-mini-input" type="number" ' +
@@ -314,7 +456,14 @@
       '  <button class="ysc-mini-btn ysc-mini-up" type="button" ' +
       '          title="加速">+</button>' +
       '  <button class="ysc-mini-expand" type="button" ' +
-      '          title="展开完整面板">▲</button>' +
+      '          title="展开完整面板">' +
+      '    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" ' +
+      '         stroke="currentColor" stroke-width="2.4" ' +
+      '         stroke-linecap="round" stroke-linejoin="round">' +
+      '      <path d="M15 3h6v6"/><path d="M9 21H3v-6"/>' +
+      '      <path d="M21 3l-7 7"/><path d="M3 21l7-7"/>' +
+      '    </svg>' +
+      '  </button>' +
       '  <button class="ysc-mini-close" type="button" ' +
       '          title="关闭面板">&times;</button>' +
       '</div>';
@@ -407,12 +556,29 @@
     });
 
     // ── 挂载到页面 ──
+
+    // 恢复上次拖动的位置；无记录则使用 CSS 默认（右下角）
+    const pos = getSavedPosition();
+    if (pos) {
+      root.style.left = pos.x + 'px';
+      root.style.top = pos.y + 'px';
+      root.style.right = 'auto';
+    }
+
     document.body.appendChild(root);
+
+    // 启用拖动
+    enableDrag(root);
 
     // 初始控件值
     const video = getVideo();
     updateControls(video ? video.playbackRate : 1);
-    applyPanelState();
+
+    if (initialState) {
+      forcePanelState(initialState);
+    } else {
+      applyPanelState();
+    }
   }
 
   // ── 视频监听（MutationObserver）────────────────────────────
@@ -458,7 +624,7 @@
         const root = getRoot();
 
         if (video && !root) {
-          createPanel();
+          createPanel('closed');
           stopVideoObserver();
           return;
         }
@@ -483,24 +649,16 @@
     }
   }
 
-  // ── 站点判断 ──────────────────────────────────────────────
-
-  function isSupportedSite() {
-    var host = location.hostname;
-    return host.indexOf('youtube.com') !== -1 || host.indexOf('bilibili.com') !== -1;
-  }
-
   // ── 初始化 ────────────────────────────────────────────────
 
   var initTimer = null;
 
   function init() {
-    if (!isSupportedSite()) return;
-
     // 防抖：短时间内多次导航只执行最后一次
     clearTimeout(initTimer);
     initTimer = setTimeout(function () {
-      createPanel();
+      // 页面加载/导航后面板默认隐藏，仅在用户点击扩展图标时显示
+      createPanel('closed');
       startVideoObserver();
     }, 80);
   }
@@ -514,22 +672,20 @@
 
   // ── SPA 导航适配 ──────────────────────────────────────────
 
-  // Bilibili：劫持 pushState / replaceState + 监听 popstate
-  if (location.hostname.indexOf('bilibili.com') !== -1) {
-    window.addEventListener('popstate', init);
+  // 通用：劫持 pushState / replaceState + 监听 popstate，适配各站单页应用
+  window.addEventListener('popstate', init);
 
-    var origPush = history.pushState;
-    history.pushState = function () {
-      origPush.apply(this, arguments);
-      init();
-    };
+  var origPush = history.pushState;
+  history.pushState = function () {
+    origPush.apply(this, arguments);
+    init();
+  };
 
-    var origReplace = history.replaceState;
-    history.replaceState = function () {
-      origReplace.apply(this, arguments);
-      init();
-    };
-  }
+  var origReplace = history.replaceState;
+  history.replaceState = function () {
+    origReplace.apply(this, arguments);
+    init();
+  };
 
   // YouTube：监听 yt-navigate-finish 事件
   document.addEventListener('yt-navigate-finish', init);
@@ -551,8 +707,8 @@
 
     // 设置速度
     if (request.speed != null) {
-      // 确保面板存在
-      if (!getRoot()) createPanel();
+      // 确保面板存在（保持隐藏，不打扰观看）
+      if (!getRoot()) createPanel('closed');
       var ok = setSpeed(request.speed);
       sendResponse({ ok: ok });
       return true;

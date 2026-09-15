@@ -1,10 +1,10 @@
 # 🎬 Video Speed Control — 视频播放速度控制扩展
 
-> 一款轻量级浏览器扩展，用于在 YouTube 和 Bilibili 上自由控制 HTML5 视频播放速度。
+> 一款轻量级浏览器扩展，用于在主流视频网站上自由控制 HTML5 视频播放速度。
 
 **版本:** 1.1  
 **Manifest:** MV3 (Manifest V3)  
-**支持平台:** YouTube · Bilibili
+**支持平台:** 30+ 主流视频网站（Bilibili · YouTube · 腾讯视频 · 爱奇艺 · 优酷 · 芒果TV 等）
 
 ---
 
@@ -13,16 +13,18 @@
 | 功能 | 说明 |
 |------|------|
 | **速度范围** | 0.1x – 4x，支持精细调节（步进 0.05x） |
-| **迷你面板** | 页面右下角悬浮小面板，默认显示，包含 **−** 按钮、**数字编辑框**、**+** 按钮 |
+| **迷你面板** | 页面右下角悬浮小面板，默认隐藏，包含 **−** 按钮、**数字编辑框**、**+** 按钮 |
 | **完整面板** | 展开后提供滑块、数字输入、加减按钮等完整控件 |
 | **数字编辑框** | 迷你面板和完整面板均支持直接输入数字，精确设置播放速度 |
 | **Popup 弹窗** | 点击浏览器工具栏的扩展图标，即使页面面板关闭也能调速 |
 | **页面面板恢复** | Popup 中可一键恢复被关闭的页面悬浮面板 |
 | **智能注入** | Popup 调速消息发送失败时自动重试注入 content script |
-| **SPA 适配** | 完整适配 YouTube 和 Bilibili 的单页应用导航（pushState / replaceState / popstate） |
+| **SPA 适配** | 通用适配各主流视频站的单页应用导航（pushState / replaceState / popstate） |
 | **动态视频检测** | MutationObserver 监听 DOM 变化，视频加载后自动创建面板 |
-| **状态持久化** | 记住面板状态（展开 / 迷你 / 关闭），跨页面保持 |
+| **状态持久化** | 记住面板状态（展开 / 迷你 / 关闭），跨页面保持；页面加载时默认隐藏，不自动弹出 |
 | **键盘友好** | 数字输入框支持 Enter 确认，聚焦时自动全选 |
+| **面板拖动** | 悬浮面板可自由拖动到页面任意位置，位置自动记忆（跨页面保持） |
+| **淡化透明** | 面板默认半透明淡化，鼠标悬浮时才恢复不透明 |
 
 ---
 
@@ -49,7 +51,7 @@
 
 5. **完成！**
    - 扩展图标会出现在浏览器工具栏中
-   - 打开 YouTube 或 Bilibili 视频页面即可看到迷你面板
+   - 打开任一支持的视频页面，点击扩展图标即可调速
 
 ### 从 Chrome 应用商店安装（待上架）
 
@@ -61,7 +63,10 @@
 
 ### 迷你面板（默认视图）
 
-打开视频页面后，右下角会自动出现迷你面板：
+**视频页面加载后，速度面板默认隐藏，不会自动出现。** 需要调速时，点击浏览器工具栏的扩展图标即可；若希望使用页面悬浮面板，在扩展弹窗中点击「🔄 恢复页面上的速度面板」即可显示。显示后的默认形态为迷你面板：
+
+> 💡 **淡化透明**：面板平时呈半透明淡化状态（透明度约 38%），鼠标悬浮到面板上时才变为不透明。
+> 💡 **自由拖动**：按住面板空白区域（按钮、输入框除外）即可拖动到页面任意位置，位置会自动记住，下次打开仍在该处。
 
 ```
 [ − ] [ 1.00x ] [ + ] [ ▲ ]
@@ -111,10 +116,14 @@
 
 ### 支持的网站
 
-| 网站 | URL 匹配 |
-|------|----------|
-| YouTube | `*://*.youtube.com/*` |
-| Bilibili | `*://*.bilibili.com/*` |
+| 分类 | 网站 |
+|------|------|
+| 国内视频 | Bilibili、腾讯视频、爱奇艺、优酷、芒果TV、搜狐视频、西瓜视频、抖音、快手、咪咕视频、央视频、好看视频、AcFun、微博、小红书 |
+| 国际视频 | YouTube、Vimeo、Dailymotion、Twitch、TikTok、Netflix、Prime Video、Disney+、Hulu、Max、Apple TV+、niconico |
+| 社交视频 | Reddit、Facebook、Instagram、X (Twitter) |
+| 教育视频 | Coursera、Udemy、Khan Academy |
+
+> 不在列表中的网站也可使用：点击扩展图标调速时会自动注入脚本（基于 `activeTab` + `scripting` 权限），只要页面有 HTML5 `<video>` 即可生效；仅"页面自动悬浮面板"需要在上述白名单站点内。
 
 ---
 
@@ -122,12 +131,12 @@
 
 ```
 youtube-speed-control/
-├── manifest.json     # 扩展清单文件（Manifest V3）
-├── content.js        # 内容脚本 —— 注入视频页面，渲染悬浮面板
-├── popup.html        # 浏览器工具栏弹窗（HTML + CSS）
-├── popup.js          # 弹窗交互逻辑
-├── icon.png          # 扩展图标
-└── README.md         # 本文件
+├── manifest.json       # 扩展清单文件（Manifest V3）
+├── content.js          # 内容脚本 —— 注入视频页面，渲染悬浮面板
+├── popup.html          # 浏览器工具栏弹窗（HTML + CSS）
+├── popup.js            # 弹窗交互逻辑
+├── speedController.png # 扩展图标
+└── README.md           # 本文件
 ```
 
 ### 各文件职责
@@ -166,14 +175,15 @@ youtube-speed-control/
 
 2. **动态视频检测**: 使用 `MutationObserver` 监听页面 DOM 变化，当检测到 `<video>` 元素时自动创建面板并同步速度。
 
-3. **SPA 导航适配**:
-   - YouTube: 监听 `yt-navigate-finish` 事件
-   - Bilibili: 劫持 `history.pushState` / `history.replaceState` + 监听 `popstate`
-   - 通用: 监听 `hashchange`
+3. **默认隐藏**: 页面加载或 SPA 导航时，面板以 `closed` 状态创建（`forcePanelState('closed')`），不会自动弹出；仅在用户通过扩展弹窗主动操作时显示。
 
-4. **智能回退注入**: Popup 发送调速消息失败时（如 content script 未注入），自动调用 `chrome.scripting.executeScript` 注入脚本后重试。
+4. **SPA 导航适配**:
+   - 通用: 劫持 `history.pushState` / `history.replaceState` + 监听 `popstate` / `hashchange`
+   - YouTube: 额外监听 `yt-navigate-finish` 事件
 
-5. **防抖处理**: 短时间内多次 SPA 导航触发使用 `setTimeout` 防抖，避免重复创建面板。
+5. **智能回退注入**: Popup 发送调速消息失败时（如 content script 未注入），自动调用 `chrome.scripting.executeScript` 注入脚本后重试。
+
+6. **防抖处理**: 短时间内多次 SPA 导航触发使用 `setTimeout` 防抖，避免重复创建面板。
 
 ### 所需权限
 
@@ -211,14 +221,13 @@ youtube-speed-control/
 
 ### Q: 页面打开后没有看到迷你面板？
 
-1. 确认当前页面是 YouTube 或 Bilibili 的视频页面（非首页/搜索页）
-2. 等待视频加载完成——面板会在视频元素出现后自动显示
-3. 检查是否之前关闭了面板——点击扩展图标 → 点击「恢复页面上的速度面板」
-4. 尝试刷新页面
+1. 这是**正常行为**——面板默认隐藏，不会自动弹出
+2. 点击浏览器工具栏的扩展图标即可在弹窗中调速
+3. 若需要在页面上显示悬浮面板，点击扩展弹窗中的「🔄 恢复页面上的速度面板」
 
-### Q: 点击扩展图标调速时报错「请在 YouTube 或 Bilibili 视频页面使用」？
+### Q: 点击扩展图标调速时报错「请在视频页面使用」？
 
-1. 确认当前标签页是 YouTube 或 Bilibili 的视频页面
+1. 确认当前标签页是包含 HTML5 视频的页面（任意网站均可）
 2. 等待页面完全加载后再操作
 3. 尝试刷新页面后重试
 4. 如果问题持续，在 `chrome://extensions` 中刷新扩展
@@ -243,3 +252,6 @@ youtube-speed-control/
 ## 🤝 贡献
 
 欢迎提交 Issue 或 Pull Request。如果你有改进建议或发现了 bug，请随时参与贡献！
+
+## 🤝 鸣谢
+free icon download：https://www.flaticon.com/free-icons/next

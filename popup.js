@@ -91,13 +91,13 @@
         // 消息发送失败 → 尝试注入 content script
         injectContentScript(function (injectErr) {
           if (injectErr) {
-            showStatus('请在 YouTube 或 Bilibili 视频页面使用', true);
+            showStatus('请在视频页面使用', true);
             return;
           }
           // 注入成功后重试
           sendToTab({ speed: normalized }, function (retryErr, retryRes) {
             if (retryErr) {
-              showStatus('请在 YouTube 或 Bilibili 视频页面使用', true);
+              showStatus('请在视频页面使用', true);
               return;
             }
             if (retryRes && retryRes.ok) {
@@ -150,12 +150,12 @@
         // 消息失败 → 尝试注入
         injectContentScript(function (injectErr) {
           if (injectErr) {
-            showStatus('请在 YouTube 或 Bilibili 视频页面使用', true);
+            showStatus('请在视频页面使用', true);
             return;
           }
           sendToTab({ action: 'showPanel' }, function (retryErr, retryRes) {
             if (retryErr) {
-              showStatus('请在 YouTube 或 Bilibili 视频页面使用', true);
+              showStatus('请在视频页面使用', true);
               return;
             }
             if (retryRes && retryRes.ok) {
@@ -175,7 +175,19 @@
   // ── 初始加载当前速度 ──────────────────────────────────────
 
   sendToTab({ action: 'getSpeed' }, function (err, response) {
-    if (err || !response) return;
+    if (err || !response) {
+      // 脚本未注入（页面未刷新 / 白名单外站点）→ 自动注入后重试一次
+      injectContentScript(function (injectErr) {
+        if (injectErr) return;
+        sendToTab({ action: 'getSpeed' }, function (retryErr, retryRes) {
+          if (retryErr || !retryRes) return;
+          if (retryRes.speed != null) {
+            updateUI(retryRes.speed);
+          }
+        });
+      });
+      return;
+    }
     if (response.speed != null) {
       updateUI(response.speed);
     }

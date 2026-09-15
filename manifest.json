@@ -4,18 +4,56 @@
   "version": "1.0",
   "description": "自定义网页视频播放速度,支持Html5视频",
     "icons": {
-    "16": "icon.png",
-    "32": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
+    "16": "speedController.png",
+    "32": "speedController.png",
+    "48": "speedController.png",
+    "128": "speedController.png"
   },
   "action": {
     "default_popup": "popup.html",
-    "default_icon": "icon.png"
+    "default_icon": "speedController.png"
   },
   "permissions": ["activeTab", "scripting"],
   "content_scripts": [{
-    "matches": ["*://*.youtube.com/*","*://*.bilibili.com/*"],
+    "matches": [
+      "*://*.youtube.com/*",
+      "*://*.bilibili.com/*",
+      "*://*.bilibili.tv/*",
+      "*://*.v.qq.com/*",
+      "*://*.iqiyi.com/*",
+      "*://*.iq.com/*",
+      "*://*.youku.com/*",
+      "*://*.mgtv.com/*",
+      "*://*.tv.sohu.com/*",
+      "*://*.ixigua.com/*",
+      "*://*.douyin.com/*",
+      "*://*.kuaishou.com/*",
+      "*://*.miguvideo.com/*",
+      "*://*.yangshipin.cn/*",
+      "*://*.haokan.baidu.com/*",
+      "*://*.acfun.cn/*",
+      "*://*.weibo.com/*",
+      "*://*.xiaohongshu.com/*",
+      "*://*.vimeo.com/*",
+      "*://*.dailymotion.com/*",
+      "*://*.twitch.tv/*",
+      "*://*.tiktok.com/*",
+      "*://*.netflix.com/*",
+      "*://*.primevideo.com/*",
+      "*://*.disneyplus.com/*",
+      "*://*.hulu.com/*",
+      "*://*.max.com/*",
+      "*://*.tv.apple.com/*",
+      "*://*.niconico.jp/*",
+      "*://*.reddit.com/*",
+      "*://*.facebook.com/*",
+      "*://*.instagram.com/*",
+      "*://*.x.com/*",
+      "*://*.twitter.com/*",
+      "*://*.coursera.org/*",
+      "*://*.udemy.com/*",
+      "*://*.khanacademy.org/*"
+    ],
     "js": ["content.js"]
   }]
 }
