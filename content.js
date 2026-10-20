@@ -2,7 +2,7 @@
   'use strict';
 
   const MIN_SPEED = 0.1;
-  const MAX_SPEED = 4;
+  const MAX_SPEED = 5;
   const STEP = 0.05;
   const ROOT_ID = 'ysc-root';
   const STORAGE_KEY = 'ysc-panel-state';
