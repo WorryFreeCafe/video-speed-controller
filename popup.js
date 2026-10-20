@@ -2,7 +2,7 @@
   'use strict';
 
   var MIN_SPEED = 0.1;
-  var MAX_SPEED = 4;
+  var MAX_SPEED = 5;
   var STEP = 0.05;
 
   var statusEl = document.getElementById('status');
